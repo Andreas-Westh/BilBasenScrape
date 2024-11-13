@@ -97,7 +97,7 @@ for (i in 1:30) {
     print(Loop)
   }
   if (i==30){
-    count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
+    count <- as.numeric(n_distinct(bilbasen100biler$carid)) # dplyr pakke bruges til n_distinct
     if (nrow(bilbasen100biler)!=count) {
       IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasen100biler)-count,"dublikationer")
       print(IDcount)
@@ -113,6 +113,9 @@ count(unique(bilbasen100biler,vars=c(carid,feature)),vars=carid) #891 unikke bil
 
 count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
 
+
+
+#### lav map over dk i kommune ####
   
 
 
