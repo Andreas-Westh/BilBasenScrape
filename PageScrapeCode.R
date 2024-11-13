@@ -99,8 +99,10 @@ for (i in 1:30) {
   }
 }
 
-unique(bilbasen100biler$carid) #tjekker antallet af unikke BilID
+options(max.print = 10000) # ændre vores max print til 10000, så vi kan gøre hele nedestående linje
 
+count(unique(bilbasen100biler,vars=c(carid,feature)),vars=carid) #891 unikke bil ID, betydende no dupes
+n_distinct(bilbasen100biler$carid) # Samme men med dplyr
 
 
 
