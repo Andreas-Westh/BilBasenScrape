@@ -53,15 +53,11 @@ ColnamesCars <- c("Pris", "Bilmodel", "Detaljer", "Beskrivelse", "Lokation", "Li
 carheader=c("pris","property","model","detailitems","description","location","link","carid","scrapedate")
 colnames(bilbasen100biler) <- ColnamesCars
 
-pb <- progress_bar$new(total = 100)
-
 
 # Loop igennem biler og ekstraher data
 for (i in 1:30) {
   loopurl <- paste0(startlink,i)
   Sys.sleep(1:3)
-  Loop <- paste0("Loopet har nu fanget: ",i*30," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
-  print(Loop)
   rawres <- GET(
     url = loopurl,
     add_headers(
@@ -96,13 +92,28 @@ for (i in 1:30) {
     error = function(cond) {
       print(cond)
     })
+    current_row_count <- nrow(bilbasen100biler)
+    Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
+    print(Loop)
   }
-}
+  if (i==30){
+    count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
+    if (nrow(bilbasen100biler)!=count) {
+      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasen100biler)-count,"dublikationer")
+      print(IDcount)
+    } else if (nrow(bilbasen100biler) == count) {
+      IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
+      print(IDcount)
+    }
+  }
+} 
 
 options(max.print = 10000) # ændre vores max print til 10000, så vi kan gøre hele nedestående linje
-
 count(unique(bilbasen100biler,vars=c(carid,feature)),vars=carid) #891 unikke bil ID, betydende no dupes
-n_distinct(bilbasen100biler$carid) # Samme men med dplyr
+
+count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
+
+  
 
 
 
