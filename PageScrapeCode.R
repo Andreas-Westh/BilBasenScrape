@@ -3,6 +3,7 @@ library(rvest)
 library(tidyverse)
 library(jsonlite)
 library(progress)
+library(stringr)
 
 
 # URL til bilbasen - søger efter BMW med diesel
@@ -54,10 +55,17 @@ carheader=c("pris","property","model","detailitems","description","location","li
 colnames(bilbasen100biler) <- ColnamesCars
 
 
-# Loop igennem biler og ekstraher data
-for (i in 1:30) {
+
+# Extract all spans on the page
+all_spans <- page %>% html_elements("span") %>% html_text(trim = TRUE)
+all_spans
+# Her kan det ses at nummer 614 er den span der indeholder sidste sidetal
+
+last_page <- as.numeric(all_spans[616]) 
+
+for (i in 1:last_page) {
   loopurl <- paste0(startlink,i)
-  Sys.sleep(1:3)
+  Sys.sleep(runif(1, min = 0.5, max = 4))
   rawres <- GET(
     url = loopurl,
     add_headers(
@@ -66,7 +74,7 @@ for (i in 1:30) {
       `Accept-Encoding` = "gzip, deflate, br",
       `Connection` = "keep-alive",
       `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-      `Cookie` = "bbsession=id=dcf43cd2-6536-47dc-8ff4-51d24110e759; bbtracker=id=4885ecaf-3275-4e5f-b55f-e3856aa2a855; _pulse2data=099e8942-dca8-4e0e-84e6-3512469bbe85%2Cv%2C%2C1731950624000%2CeyJpc3N1ZWRBdCI6IjIwMjQtMTEtMTFUMTc6MjM6MzhaIiwiZW5jIjoiQTEyOENCQy1IUzI1NiIsInJlSXNzdWVkQXQiOiIyMDI0LTExLTExVDE3OjIzOjQ0WiIsImFsZyI6ImRpciIsImtpZCI6IjIifQ..JnRCQnyJHjCCfa6moauXlg.QWh1TCV3dkx3dOorgjvSyGLlUGq1ry-WsJrlGqhHjLwYsfo2Iud_f9VCCJWJUc8SZ3vHK2FEFCxkuwhgxNhoS0h8dEeDaG46IyQRDgVwb3TTxGqR-jxCyObOCSHwjmX_UyQjy23zKUTQHR9xZWYZiexjHtJ8h…p_marketing=1; _cmp_advertising=1; consentUUID=2093de02-b803-4dfa-9a2b-6560e6650e4e_37; consentDate=2024-11-11T17:23:40.525Z; aws-waf-token=e18a363b-7943-4583-9347-97efcace04d7:CgoAvqI8VjhyAAAA:hbVS7hABFKoTeNwIIRjIM4fU/LbRNMz0vyKoCm0Ac5yGXTNfuu9UUf7jYtvrNaep6g9YbXsz/P2uqvKVKwdQLvuPofO/rxjLufdaACwHXb22kAO98ZpBLuou0KmwCdiLAfzEaZwK3ai5QfNRzg0gXDP3MxF/C4KoaHG2SrS0JI5TXA4FeESkUe2TFE3esjpF; _pulsesession=%5B%22sdrn%3Aschibsted%3Asession%3A69cd6bb4-5a21-4fa3-8c3b-45b5dcd03a40%22%2C1731401287643%2C1731402689664%5D"
+      `Cookie` = cookie 
     )
     #pb$tick() progress bar, kan ikke få den til at virke
   )
@@ -96,7 +104,7 @@ for (i in 1:30) {
     Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
     print(Loop)
   }
-  if (i==30){
+  if (i==last_page){
     count <- as.numeric(n_distinct(bilbasen100biler$carid)) # dplyr pakke bruges til n_distinct
     if (nrow(bilbasen100biler)!=count) {
       IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasen100biler)-count,"dublikationer")
@@ -116,9 +124,17 @@ count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
 
 
 #### lav map over dk i kommune ####
-  
+# https://github.com/sebastianbarfort/mapDK
 
 
+# Konverter location til 2; kommune og region
+library(dplyr)
+library(tidyr)
+bildata <- as.data.frame(bilbasen100biler)
+bildata <- df %>% separate(bildata$location, c("kommune","region"))
+
+library(mapDK)
+mapDK(values = "pris", id = "")
 
 
 
