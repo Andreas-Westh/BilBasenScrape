@@ -57,11 +57,8 @@ colnames(bilbasen100biler) <- ColnamesCars
 
 
 # Extract all spans on the page
-all_spans <- page %>% html_elements("span") %>% html_text(trim = TRUE)
-all_spans
-# Her kan det ses at nummer 614 er den span der indeholder sidste sidetal
-
-last_page <- as.numeric(all_spans[616]) 
+all_spans <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE)
+last_page <- as.numeric(all_spans)
 
 for (i in 1:last_page) {
   loopurl <- paste0(startlink,i)
