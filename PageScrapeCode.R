@@ -133,5 +133,8 @@ bildata <- df %>% separate(bildata$location, c("kommune","region"))
 library(mapDK)
 mapDK(values = "pris", id = "")
 
+#jhfioafoanfoafnaof
 
+
+€jkfjf
 
