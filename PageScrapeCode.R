@@ -30,8 +30,6 @@ rawres <- GET(
 )
 print(rawres$status_code)
 
-# Tjek statuskode
-print(rawres$status_code)
 
 # Hent HTML-indholdet fra svaret
 rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
@@ -43,22 +41,21 @@ carlist <- page %>% html_elements("article")
 # Definer CSS-selectors til at hente data
 ptag <- ".Listing_price__6B3kE"
 makertag <- ".Listing_makeModel__7yqgs"
+modalnametag <- "h3" # Kun udtage den specifikke bilmodel (bliver relevant ved den tyske scrape)
 bildetails <- ".ListingDetails_listItem___omDg"
 bildescripts <- ".Listing_description__sCNNM"
 billocation <- ".Listing_location__nKGQz"
 prop <- ".Listing_properties___ptWv"
 
 # Opret en dataframe til at gemme bildata
-bilbasen100biler <- data.frame(matrix(data = NA, nrow = 0, ncol = 8))
-ColnamesCars <- c("Pris", "Bilmodel", "Detaljer", "Beskrivelse", "Lokation", "Link", "Bil-ID", "Scrape-Dato")
-carheader=c("pris","property","model","detailitems","description","location","link","carid","scrapedate")
-colnames(bilbasen100biler) <- ColnamesCars
+bilbasenWebScrape <- data.frame(matrix(data = NA, nrow = 0, ncol = 9))
+ColnamesCars <- c("Pris", "Bilmodel", "Specific Model", "Detaljer", "Beskrivelse", "Lokation", "Link", "Bil-ID", "Scrape-Dato")
+colnames(bilbasenWebScrape) <- ColnamesCars
 
 
 
 # Extract all spans on the page
-all_spans <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE)
-last_page <- as.numeric(all_spans)
+last_page <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE) %>% as.numeric()
 
 #### Webscrape Loop #### 
 for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
@@ -74,7 +71,6 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
       `Cookie` = cookie 
     )
-    #pb$tick() progress bar, kan ikke få den til at virke
   )
   rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
   page <- read_html(rawcontent)
@@ -83,6 +79,7 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
     tryCatch({
       pris <- car %>% html_element(ptag) %>% html_text(trim = TRUE)
       model <- car %>% html_element(makertag) %>% html_text(trim = TRUE)
+      specificmodel <- car %>% html_element(modalnametag) %>% html_text(trim = TRUE)
       details <- car %>% html_elements(bildetails) %>% html_text(trim = TRUE) %>% paste0(collapse = "_")
       description <- car %>% html_element(bildescripts) %>% html_text(trim = TRUE)
       location <- car %>% html_element(billocation) %>% html_text(trim = TRUE)
@@ -91,24 +88,31 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       property <- car %>% html_element(prop) %>% html_text(trim=T)
       
       # Opret en midlertidig dataframe og tilføj den til den samlede dataframe
-      tmpDF <- data.frame(pris, model, details, property, description, location, link, carid, Sys.time(), stringsAsFactors = FALSE)
-      bilbasen100biler <- rbind(bilbasen100biler, tmpDF)
+      tmpDF <- data.frame(pris, model, specificmodel, details, property, description, location, link, carid, Sys.time(), stringsAsFactors = FALSE)
+      bilbasenWebScrape <- rbind(bilbasenWebScrape, tmpDF)
     },
     error = function(cond) {
       print(cond)
     })
-    current_row_count <- nrow(bilbasen100biler)
+    current_row_count <- nrow(bilbasenWebScrape)
     Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
     print(Loop)
   }
   if (i==last_page){ #Bruges til at lave output i console
-    count <- as.numeric(n_distinct(bilbasen100biler$carid)) # dplyr pakke bruges til n_distinct
-    if (nrow(bilbasen100biler)!=count) {
-      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasen100biler)-count,"dublikationer")
+    count <- as.numeric(n_distinct(bilbasenWebScrape$carid)) # dplyr pakke bruges til n_distinct
+    if (nrow(bilbasenWebScrape)!=count) {
+      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasenWebScrape)-count,"dublikationer")
       print(IDcount)
-    } else if (nrow(bilbasen100biler) == count) {
+    } else if (nrow(bilbasenWebScrape) == count) { # Sker kun, når loopet er færdigt
       IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
       print(IDcount)
+      # Gemme filen som CSV
+      RDSname <- paste0("bilbasenWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
+      saveRDS(bilbasenWebScrape, RDSname)
+      RDSsave <- paste0("Gemmer den scrapede data i filen: ",RDSname)
+      print(RDSsave)
+      bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
+      bilmodeller <- data.frame(unique(bilbasenWebScrape$specificmodel))
     }
   }
 } 
@@ -121,9 +125,9 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
 ############################################################
 
 options(max.print = 10000) # ændre vores max print til 10000, så vi kan gøre hele nedestående linje
-count(unique(bilbasen100biler,vars=c(carid,feature)),vars=carid) #891 unikke bil ID, betydende no dupes
+count(unique(bilbasenWebScrape,vars=c(carid,feature)),vars=carid) #891 unikke bil ID, betydende no dupes
 
-count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
+count <- as.numeric(n_distinct(bilbasenWebScrape$carid)) # Samme men med dplyr
 
 #### Tyske hjemmesider ####
 # 1. https://www.mobile.de/
@@ -137,6 +141,7 @@ count <- as.numeric(n_distinct(bilbasen100biler$carid)) # Samme men med dplyr
 # https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=2&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU
 
 #### Webscrape Tyskland ####
+# Lave et loop der macther til biler i Bilmodeller df
 UserT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0"
 Tstartlink <- paste0("https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=","","&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
 Trawres <- GET(
@@ -172,12 +177,13 @@ Timagetag <- '.img.NewGallery_img__cXZQC'
 
 Tyskebiler <- data.frame(matrix(data = NA, nrow = 0, ncol = 13))
 ColnamesTysk <- c("Pris", "Navn", "Milage", "Calender", "Type", "Speedometer", "Distence", "Lightning", "Leaf", "Seller", "SellerRating", "Image", "Scrape-date")
-colnames(Tyskebiler) <- ColnamesCars
+colnames(Tyskebiler) <- ColnamesTysk
 
 #Tlast_page <- Tpage %>% html_elements('button') %>% html_text(trim = TRUE)
 
-# Denne hjemmeside viser kun 20 sider......
-# Kan evt genskabe, men for den anden side, den viste flere
+# Vælge en MakeModel, for at komme rundt om 20 maks sider 
+# scrollable-list
+
 for (i in 1:20) {
   Tloopurl <- paste0("https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=",i,"&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
   Sys.sleep(runif(1, min = 0.5, max = 4))
@@ -186,9 +192,9 @@ for (i in 1:20) {
     url = Tloopurl,
     add_headers(`User-Agent` = UserT)
   )
-      if (Trawres$status_code != 200) {
-      print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
-       }
+  if (Trawres$status_code != 200) {
+    print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
+  }
   
   Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
   Tpage <- read_html(Trawcontent)
@@ -196,7 +202,7 @@ for (i in 1:20) {
   Tcarlist <- Tpage %>% html_elements("article")
   
   for (Tcar in Tcarlist) {
-    Tpris <- Tcar %>% html_element(Tptag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+    Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
     Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
     Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
     Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
@@ -219,71 +225,96 @@ for (i in 1:20) {
   }
 }
 
+#### Tyskebiler nr 2 :DDDDDDD ####
 
+# https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=1&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car
 
-
-
-#for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
-  loopurl <- paste0(startlink,i)
-  Sys.sleep(runif(1, min = 0.5, max = 4))
-  rawres <- GET(
-    url = loopurl,
-    add_headers(
-      `User-Agent` = UserA,
-      `Accept-Language` = "en-US,en;q=0.9",
-      `Accept-Encoding` = "gzip, deflate, br",
-      `Connection` = "keep-alive",
-      `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-      `Cookie` = cookie 
-    )
-    #pb$tick() progress bar, kan ikke få den til at virke
-  )
-  rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
-  page <- read_html(rawcontent)
-  carlist <- page %>% html_elements("article")
-  for (car in carlist) { # Webscrape
-    tryCatch({
-      pris <- car %>% html_element(ptag) %>% html_text(trim = TRUE)
-      model <- car %>% html_element(makertag) %>% html_text(trim = TRUE)
-      details <- car %>% html_elements(bildetails) %>% html_text(trim = TRUE) %>% paste0(collapse = "_")
-      description <- car %>% html_element(bildescripts) %>% html_text(trim = TRUE)
-      location <- car %>% html_element(billocation) %>% html_text(trim = TRUE)
-      link <- car %>% html_element("a") %>% html_attr("href")
-      carid <- link %>% str_extract("[0-9]{7}")
-      property <- car %>% html_element(prop) %>% html_text(trim=T)
-      
-      # Opret en midlertidig dataframe og tilføj den til den samlede dataframe
-      tmpDF <- data.frame(pris, model, details, property, description, location, link, carid, Sys.time(), stringsAsFactors = FALSE)
-      bilbasen100biler <- rbind(bilbasen100biler, tmpDF)
-    },
-    error = function(cond) {
-      print(cond)
-    })
-    current_row_count <- nrow(bilbasen100biler)
-    Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
-    print(Loop)
-  }
-  if (i==last_page){ #Bruges til at lave output i console
-    count <- as.numeric(n_distinct(bilbasen100biler$carid)) # dplyr pakke bruges til n_distinct
-    if (nrow(bilbasen100biler)!=count) {
-      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasen100biler)-count,"dublikationer")
-      print(IDcount)
-    } else if (nrow(bilbasen100biler) == count) {
-      IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
-      print(IDcount)
-    }
-  }
-} 
-
-
-#### lav map over dk i kommune ####
-# https://github.com/sebastianbarfort/mapDK
+#mobilelink <- paste0("https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=","","&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car")
+#Mrawres <- GET(
+#  url = mobilelink,
+#  add_headers(
+#    `User-Agent` = UserT#,
+#`Accept-Language` = "en-US,en;q=0.9",
+#`Accept-Encoding` = "gzip, deflate, br",
+#`Connection` = "keep-alive",
+#`Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+#`Cookie` = cookie
+#  )
+#)
+#print(Mrawres$status_code)
+#Mrawcontent <- httr::content(Mrawres, as = "text", encoding = "UTF-8")
+#Mpage <- read_html(Mrawcontent)
+#Mcarlist <- Mpage %>% html_elements("article")
+#
+#Mnametag <- 'h2.QeGRL'
+#Mpricetag <- 'span[data-testid="price-label"]' #test <- Mpage %>% html_element(Mpricetag) %>% html_text(trim = T)
+#Mlistingattributes <- 'span[data-testid="listing-details-attributes"]'
+#Mvattag <- 'span[data-testid="price-vat"]'
+#Mpricerainttag <- '._u77E bzOeV'
+#Msellertagtag <- '.rjHf7 Ssf9m'
+#Msellerratingtag <- '.CaPWA'
+#Msellerratingamounttag <- '.W9v_K'
+#
+#MobileDF <- data.frame(matrix(data = NA, nrow = 0, ncol = 13))
+#ColnamesMobile <- c("Name","Pris","Listing","VAT","priceraint","seller","starrating","ratingamount","scrape-date")
+#colnames(MobileDF) <- ColnamesMobile
+#
+#for (i in 1:5) {
+#  Mloopurl <- paste0(paste0("https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=","","&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car"))
+#  Sys.sleep(runif(1, min = 0.5, max = 4))
+#  print(i)
+#  Mrawres <- GET(
+#    url = Mloopurl,
+#    add_headers(
+#      `User-Agent` = UserT#,
+#      #`Accept-Language` = "en-US,en;q=0.9",
+#      #`Accept-Encoding` = "gzip, deflate, br",
+#      #`Connection` = "keep-alive",
+#      #`Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+#      #`Cookie` = cookie
+#    )
+#  )
+#  if (Mrawres$status_code != 200) {
+#    print(paste("Fejl i anmodning, statuskode:", Mrawres$status_code))
+#  }
+#  
+#  Mrawcontent <- httr::content(Mrawres, as = "text", encoding = "UTF-8")
+#  Mpage <- read_html(Mrawcontent)
+#  
+#  Mcarlist <- Mpage %>% html_elements("article")
+#  
+#  for (Mcar in Mcarlist) {
+#    Mname <- Mcar %>% html_element(Mnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Mprice <- Mcar %>% html_element(Mpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Mattributes <- Mcar %>% html_element(Mlistingattributes) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Mvat <- Mcar %>% html_element(Mvattag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Midk <- Mcar %>% html_element(Mpricerainttag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Mseller <- Mcar %>% html_element(Msellertagtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Msellerrating <- Mcar %>% html_element(Msellerratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    Mratingamount <- Mcar %>% html_element(Msellerratingamounttag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+#    
+#    tmpDF <- data.frame(
+#      Mname, Mprice, Mattributes, Mvat, Midk, Mseller, 
+#      Msellerrating, Mratingamount, 
+#      Sys.time(), stringsAsFactors = FALSE
+#    )
+#    
+#    MobileDF <- rbind(MobileDF, tmpDF)
+#  }
+#}
+#
+#
+#
+#
+#
+##### lav map over dk i kommune ####
+## https://github.com/sebastianbarfort/mapDK
 
 
 # Konverter location til 2; kommune og region
 library(dplyr)
 library(tidyr)
-bildata <- as.data.frame(bilbasen100biler)
+bildata <- as.data.frame(bilbasenWebScrape)
 bildata <- df %>% separate(bildata$location, c("kommune","region"))
 
 library(mapDK)
