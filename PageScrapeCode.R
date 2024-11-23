@@ -113,7 +113,7 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
   }
 } 
 
-############################################################
+###########################################################
 ############################################################
 ##   Lav det, så man evt. selv kan vælge mærke, type osv  ##
 ##   I url så er alle biler = bil                         ##
