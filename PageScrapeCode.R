@@ -107,12 +107,12 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
     } else if (nrow(bilbasenWebScrape) == count) { # Sker kun, når loopet er færdigt
       IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
       print(IDcount)
-        # Gemmer filsen som en RDS
+      # Gemmer filsen som en RDS
       RDSname <- paste0("bilbasenWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
       saveRDS(bilbasenWebScrape, RDSname)
       RDSsave <- paste0("Gemmer den scrapede data i filen: ",RDSname)
       print(RDSsave)
-        # Laver en kolonne med den specifikke bilmoden, bliver relevant til det tyske loop
+      # Laver en kolonne med den specifikke bilmoden, bliver relevant til det tyske loop
       bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
       bilmodeller <- data.frame(unique(bilbasenWebScrape$specificmodel))
     }
@@ -191,28 +191,28 @@ colnames(Tyskebiler) <- ColnamesTysk
 
 # Vælge en MakeModel, for at komme rundt om 20 maks sider 
 # scrollable-list
-for (model in bilmodeller) {
-Modelscrape <- paste0("Scraper nu for model: ", model)
-print(Modelscrape)
-Tlast_page <- NULL
- modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
- Trawres <- GET(
-   url = modellink,
-   add_headers(`User-Agent` = UserT)
- )
- if (Trawres$status_code != 200) {
-   print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
- }
- Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
- Tpage <- read_html(Trawcontent)
- Tlast_page <- Tpage %>%
-   html_elements("li.pagination-item button") %>%
-   html_text(trim = TRUE) %>%
-   tail(1) %>% as.numeric()
- Ttotalsider <- paste0("Total antal sider for denne model: ", Tlast_page)
- print(Ttotalsider)
- modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
-  for (i in 1:Tlast_page) {
+for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i linket
+  Modelscrape <- paste0("Scraper nu for model: ", model)
+  print(Modelscrape)
+  Tlast_page <- NULL
+  modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
+  Trawres <- GET(
+    url = modellink,
+    add_headers(`User-Agent` = UserT)
+  )
+  if (Trawres$status_code != 200) { # Mindre kode til at tjekke status 
+    print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
+  }
+  Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
+  Tpage <- read_html(Trawcontent)
+  Tlast_page <- Tpage %>%
+    html_elements("li.pagination-item button") %>%
+    html_text(trim = TRUE) %>%
+    tail(1) %>% as.numeric()
+  Ttotalsider <- paste0("Total antal sider for denne model: ", Tlast_page)
+  print(Ttotalsider)
+  modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
+  for (i in 1:Tlast_page) { # Loop gennem sider for den nuværende model
     Tloopurl <- paste0(modellink,i,"&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
     side_progress <- paste0("side: ",i,"/",Tlast_page," for modellen: ",model)
     print(side_progress)
@@ -221,130 +221,48 @@ Tlast_page <- NULL
       url = Tloopurl,
       add_headers(`User-Agent` = UserT)
     )
-    if (Trawres$status_code != 200) {
-      print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
-    }
-    
     Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
     Tpage <- read_html(Trawcontent)
     
     Tcarlist <- Tpage %>% html_elements("article")
     
-    for (Tcar in Tcarlist) {
+    for (Tcar in Tcarlist) { #Loop at nuværende side, aka det reele scrape af bil info
       tryCatch({
-      Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tgas <- Tcar %>% html_element(Tgastag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tspeedometer <- Tcar %>% html_element(Tspeedometertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tdistance <- Tcar %>% html_element(Tdistancetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tlightning <- Tcar %>% html_element(Tlightningtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tleaf <- Tcar %>% html_element(Tleaftag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Tseller <- Tcar %>% html_element(Tsellertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Trating <- Tcar %>% html_element(Tratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-      Timage <- Tcar %>% html_element(Timagetag) %>% html_attr("src") %>% ifelse(is.na(.), "NA", .)
-      
-      tmpDF <- data.frame(
-        Tpris, Tname, Tmilage, Tcalender, Tgas, Tspeedometer, 
-        Tdistance, Tlightning, Tleaf, Tseller, Trating, Timage, 
-        Sys.time(), stringsAsFactors = FALSE
-      )
-      
-      Tyskebiler <- rbind(Tyskebiler, tmpDF)
+        Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tgas <- Tcar %>% html_element(Tgastag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tspeedometer <- Tcar %>% html_element(Tspeedometertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tdistance <- Tcar %>% html_element(Tdistancetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tlightning <- Tcar %>% html_element(Tlightningtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tleaf <- Tcar %>% html_element(Tleaftag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tseller <- Tcar %>% html_element(Tsellertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Trating <- Tcar %>% html_element(Tratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Timage <- Tcar %>% html_element(Timagetag) %>% html_attr("src") %>% ifelse(is.na(.), "NA", .)
+        
+        tmpDF <- data.frame(
+          Tpris, Tname, Tmilage, Tcalender, Tgas, Tspeedometer, 
+          Tdistance, Tlightning, Tleaf, Tseller, Trating, Timage, 
+          Sys.time(), stringsAsFactors = FALSE
+        )
+        
+        Tyskebiler <- rbind(Tyskebiler, tmpDF)
       })
-        error = function(cond) {
-          print(cond)
-        }
-        Tcurrent_row_count <- nrow(Tyskebiler)
-        TLoop <- paste0("Loopet har nu fanget: ",Tcurrent_row_count," tyske biler, klokken: ",format(Sys.time(),"%Y-%m-%d-%H-%M"))
-        print(TLoop)
+      error = function(cond) {
+        print(cond)
+      }
+      Tcurrent_row_count <- nrow(Tyskebiler)
+      TLoop <- paste0("Loopet har nu fanget: ",Tcurrent_row_count," tyske biler, klokken: ",format(Sys.time(),"%Y-%m-%d-%H-%M"))
+      print(TLoop)
     }
   }
 }
+
 TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
 saveRDS(Tyskebiler, TRDSname)
-TRDSsave <- paste0("Gemmer den scrapede data i filen: ",TRDSname)
-print(TRDSsave)
 
-#### Tyskebiler nr 2 :DDDDDDD ####
-
-# https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=1&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car
-
-#mobilelink <- paste0("https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=","","&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car")
-#Mrawres <- GET(
-#  url = mobilelink,
-#  add_headers(
-#    `User-Agent` = UserT#,
-#`Accept-Language` = "en-US,en;q=0.9",
-#`Accept-Encoding` = "gzip, deflate, br",
-#`Connection` = "keep-alive",
-#`Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-#`Cookie` = cookie
-#  )
-#)
-#print(Mrawres$status_code)
-#Mrawcontent <- httr::content(Mrawres, as = "text", encoding = "UTF-8")
-#Mpage <- read_html(Mrawcontent)
-#Mcarlist <- Mpage %>% html_elements("article")
-#
-#Mnametag <- 'h2.QeGRL'
-#Mpricetag <- 'span[data-testid="price-label"]' #test <- Mpage %>% html_element(Mpricetag) %>% html_text(trim = T)
-#Mlistingattributes <- 'span[data-testid="listing-details-attributes"]'
-#Mvattag <- 'span[data-testid="price-vat"]'
-#Mpricerainttag <- '._u77E bzOeV'
-#Msellertagtag <- '.rjHf7 Ssf9m'
-#Msellerratingtag <- '.CaPWA'
-#Msellerratingamounttag <- '.W9v_K'
-#
-#MobileDF <- data.frame(matrix(data = NA, nrow = 0, ncol = 13))
-#ColnamesMobile <- c("Name","Pris","Listing","VAT","priceraint","seller","starrating","ratingamount","scrape-date")
-#colnames(MobileDF) <- ColnamesMobile
-#
-#for (i in 1:5) {
-#  Mloopurl <- paste0(paste0("https://suchen.mobile.de/fahrzeuge/search.html?dam=false&ft=ELECTRICITY&isSearchRequest=true&ms=3500%3B%3B%3B&pageNumber=","","&ref=srpNextPage&refId=bc536ead-c5ad-10c7-3f22-6b23e45d7bf4&s=Car&sb=rel&vc=Car"))
-#  Sys.sleep(runif(1, min = 0.5, max = 4))
-#  print(i)
-#  Mrawres <- GET(
-#    url = Mloopurl,
-#    add_headers(
-#      `User-Agent` = UserT#,
-#      #`Accept-Language` = "en-US,en;q=0.9",
-#      #`Accept-Encoding` = "gzip, deflate, br",
-#      #`Connection` = "keep-alive",
-#      #`Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-#      #`Cookie` = cookie
-#    )
-#  )
-#  if (Mrawres$status_code != 200) {
-#    print(paste("Fejl i anmodning, statuskode:", Mrawres$status_code))
-#  }
-#  
-#  Mrawcontent <- httr::content(Mrawres, as = "text", encoding = "UTF-8")
-#  Mpage <- read_html(Mrawcontent)
-#  
-#  Mcarlist <- Mpage %>% html_elements("article")
-#  
-#  for (Mcar in Mcarlist) {
-#    Mname <- Mcar %>% html_element(Mnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Mprice <- Mcar %>% html_element(Mpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Mattributes <- Mcar %>% html_element(Mlistingattributes) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Mvat <- Mcar %>% html_element(Mvattag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Midk <- Mcar %>% html_element(Mpricerainttag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Mseller <- Mcar %>% html_element(Msellertagtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Msellerrating <- Mcar %>% html_element(Msellerratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    Mratingamount <- Mcar %>% html_element(Msellerratingamounttag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-#    
-#    tmpDF <- data.frame(
-#      Mname, Mprice, Mattributes, Mvat, Midk, Mseller, 
-#      Msellerrating, Mratingamount, 
-#      Sys.time(), stringsAsFactors = FALSE
-#    )
-#    
-#    MobileDF <- rbind(MobileDF, tmpDF)
-#  }
-#}
-#
+# Kunne være spændende at se om man kan scrape geo data, og lave et map
 #
 #
 #
