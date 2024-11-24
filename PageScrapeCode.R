@@ -108,7 +108,10 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
       print(IDcount)
         # Gemmer filsen som en RDS
-
+      RDSname <- paste0("bilbasenWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
+      saveRDS(bilbasenWebScrape, RDSname)
+      RDSsave <- paste0("Gemmer den scrapede data i filen: ",RDSname)
+      print(RDSsave)
         # Laver en kolonne med den specifikke bilmoden, bliver relevant til det tyske loop
       bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
       bilmodeller <- data.frame(unique(bilbasenWebScrape$specificmodel))
@@ -259,6 +262,10 @@ Tlast_page <- NULL
     }
   }
 }
+TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
+saveRDS(Tyskebiler, TRDSname)
+TRDSsave <- paste0("Gemmer den scrapede data i filen: ",TRDSname)
+print(TRDSsave)
 
 #### Tyskebiler nr 2 :DDDDDDD ####
 
