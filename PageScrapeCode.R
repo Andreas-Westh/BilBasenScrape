@@ -56,6 +56,7 @@ colnames(bilbasenWebScrape) <- ColnamesCars
 
 # Extract all spans on the page
 last_page <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE) %>% as.numeric()
+bilbasenWebScrape <- readRDS("bilbasenWebScrape_2024-11-23-22-35.rds")
 
 #### Webscrape Loop #### 
 for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
@@ -95,7 +96,7 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       print(cond)
     })
     current_row_count <- nrow(bilbasenWebScrape)
-    Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%a %b %d %X %Y"))
+    Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%Y-%m-%d-%H-%M"))
     print(Loop)
   }
   if (i==last_page){ #Bruges til at lave output i console
@@ -106,16 +107,16 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
     } else if (nrow(bilbasenWebScrape) == count) { # Sker kun, når loopet er færdigt
       IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
       print(IDcount)
-      # Gemme filen som CSV
-      RDSname <- paste0("bilbasenWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
-      saveRDS(bilbasenWebScrape, RDSname)
-      RDSsave <- paste0("Gemmer den scrapede data i filen: ",RDSname)
-      print(RDSsave)
+        # Gemmer filsen som en RDS
+
+        # Laver en kolonne med den specifikke bilmoden, bliver relevant til det tyske loop
       bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
       bilmodeller <- data.frame(unique(bilbasenWebScrape$specificmodel))
     }
   }
 } 
+bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
+bilmodeller <- as.list(unique(bilbasenWebScrape$specificmodel))
 
 ###########################################################
 ############################################################
@@ -179,49 +180,83 @@ Tyskebiler <- data.frame(matrix(data = NA, nrow = 0, ncol = 13))
 ColnamesTysk <- c("Pris", "Navn", "Milage", "Calender", "Type", "Speedometer", "Distence", "Lightning", "Leaf", "Seller", "SellerRating", "Image", "Scrape-date")
 colnames(Tyskebiler) <- ColnamesTysk
 
-#Tlast_page <- Tpage %>% html_elements('button') %>% html_text(trim = TRUE)
+
+#Tlast_page <- Tpage %>%
+#  html_elements("li.pagination-item button") %>%
+#  html_text(trim = TRUE) %>%
+#  tail(1) %>% as.numeric()
 
 # Vælge en MakeModel, for at komme rundt om 20 maks sider 
 # scrollable-list
-
-for (i in 1:20) {
-  Tloopurl <- paste0("https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=",i,"&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
-  Sys.sleep(runif(1, min = 0.5, max = 4))
-  print(i)
-  Trawres <- GET(
-    url = Tloopurl,
-    add_headers(`User-Agent` = UserT)
-  )
-  if (Trawres$status_code != 200) {
-    print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
-  }
-  
-  Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
-  Tpage <- read_html(Trawcontent)
-  
-  Tcarlist <- Tpage %>% html_elements("article")
-  
-  for (Tcar in Tcarlist) {
-    Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tgas <- Tcar %>% html_element(Tgastag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tspeedometer <- Tcar %>% html_element(Tspeedometertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tdistance <- Tcar %>% html_element(Tdistancetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tlightning <- Tcar %>% html_element(Tlightningtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tleaf <- Tcar %>% html_element(Tleaftag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Tseller <- Tcar %>% html_element(Tsellertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Trating <- Tcar %>% html_element(Tratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
-    Timage <- Tcar %>% html_element(Timagetag) %>% html_attr("src") %>% ifelse(is.na(.), "NA", .)
-    
-    tmpDF <- data.frame(
-      Tpris, Tname, Tmilage, Tcalender, Tgas, Tspeedometer, 
-      Tdistance, Tlightning, Tleaf, Tseller, Trating, Timage, 
-      Sys.time(), stringsAsFactors = FALSE
+for (model in bilmodeller) {
+Modelscrape <- paste0("Scraper nu for model: ", model)
+print(Modelscrape)
+Tlast_page <- NULL
+ modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
+ Trawres <- GET(
+   url = modellink,
+   add_headers(`User-Agent` = UserT)
+ )
+ if (Trawres$status_code != 200) {
+   print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
+ }
+ Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
+ Tpage <- read_html(Trawcontent)
+ Tlast_page <- Tpage %>%
+   html_elements("li.pagination-item button") %>%
+   html_text(trim = TRUE) %>%
+   tail(1) %>% as.numeric()
+ Ttotalsider <- paste0("Total antal sider for denne model: ", Tlast_page)
+ print(Ttotalsider)
+ modellink <- paste0("https://www.autoscout24.de/lst/bmw/", model, "/ft_elektro?atype=C&cy=D&damaged_listing=exclude&desc=0&ocs_listing=include&page=")
+  for (i in 1:Tlast_page) {
+    Tloopurl <- paste0(modellink,i,"&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
+    side_progress <- paste0("side: ",i,"/",Tlast_page," for modellen: ",model)
+    print(side_progress)
+    Sys.sleep(runif(1, min = 0.5, max = 2))
+    Trawres <- GET(
+      url = Tloopurl,
+      add_headers(`User-Agent` = UserT)
     )
+    if (Trawres$status_code != 200) {
+      print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
+    }
     
-    Tyskebiler <- rbind(Tyskebiler, tmpDF)
+    Trawcontent <- httr::content(Trawres, as = "text", encoding = "UTF-8")
+    Tpage <- read_html(Trawcontent)
+    
+    Tcarlist <- Tpage %>% html_elements("article")
+    
+    for (Tcar in Tcarlist) {
+      tryCatch({
+      Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tgas <- Tcar %>% html_element(Tgastag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tspeedometer <- Tcar %>% html_element(Tspeedometertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tdistance <- Tcar %>% html_element(Tdistancetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tlightning <- Tcar %>% html_element(Tlightningtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tleaf <- Tcar %>% html_element(Tleaftag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Tseller <- Tcar %>% html_element(Tsellertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Trating <- Tcar %>% html_element(Tratingtag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+      Timage <- Tcar %>% html_element(Timagetag) %>% html_attr("src") %>% ifelse(is.na(.), "NA", .)
+      
+      tmpDF <- data.frame(
+        Tpris, Tname, Tmilage, Tcalender, Tgas, Tspeedometer, 
+        Tdistance, Tlightning, Tleaf, Tseller, Trating, Timage, 
+        Sys.time(), stringsAsFactors = FALSE
+      )
+      
+      Tyskebiler <- rbind(Tyskebiler, tmpDF)
+      })
+        error = function(cond) {
+          print(cond)
+        }
+        Tcurrent_row_count <- nrow(Tyskebiler)
+        TLoop <- paste0("Loopet har nu fanget: ",Tcurrent_row_count," tyske biler, klokken: ",format(Sys.time(),"%Y-%m-%d-%H-%M"))
+        print(TLoop)
+    }
   }
 }
 
