@@ -5,7 +5,7 @@ library(jsonlite)
 library(progress)
 library(stringr)
 
-
+#### Opgave 1.1 ####
 # URL til bilbasen - søger efter BMW med diesel
 startlink <- "https://www.bilbasen.dk/brugt/bil/bmw?fuel=3&includeengroscvr=true&includeleasing=false&page="
 
@@ -53,15 +53,14 @@ ColnamesCars <- c("Pris", "Bilmodel", "Specific Model", "Detaljer", "Beskrivelse
 colnames(bilbasenWebScrape) <- ColnamesCars
 
 
-
 # Extract all spans on the page
 last_page <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE) %>% as.numeric()
-bilbasenWebScrape <- readRDS("bilbasenWebScrape_2024-11-23-22-35.rds")
+#bilbasenWebScrape <- readRDS("bilbasenWebScrape_2024-11-23-22-35.rds")
 
 #### Webscrape Loop #### 
 for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
   loopurl <- paste0(startlink,i)
-  Sys.sleep(runif(1, min = 0.5, max = 4))
+  Sys.sleep(runif(1, min = 0.5, max = 2))
   rawres <- GET(
     url = loopurl,
     add_headers(
@@ -83,6 +82,13 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       specificmodel <- car %>% html_element(modalnametag) %>% html_text(trim = TRUE)
       details <- car %>% html_elements(bildetails) %>% html_text(trim = TRUE) %>% paste0(collapse = "_")
       description <- car %>% html_element(bildescripts) %>% html_text(trim = TRUE)
+        #### Opgave 1.2 Rens data ####
+            description <- gsub("\n\\d[0-9]*","",description) # Fjerner HTML/CSS page break
+            description <- gsub("[^A-Za-z0-9,. æøåÆØÅ]", "", description) # Fjerner unwanted chars via ^ (basically en NOT)
+            description <- gsub("\\s+", " ", description) # Samler multiple spaces med 1
+            description <- gsub("\\s*\\.\\s*\\.\\s*", ". ", description) # Samler multiple . (selv hvis der er space) til 1
+            description <- gsub("^\\s*[0-9]*\\.\\s*", "", description) # fjerner start med tal eller space
+            description <- gsub("^\\s+", "", description)
       location <- car %>% html_element(billocation) %>% html_text(trim = TRUE)
       link <- car %>% html_element("a") %>% html_attr("href")
       carid <- link %>% str_extract("[0-9]{7}")
@@ -132,6 +138,13 @@ options(max.print = 10000) # ændre vores max print til 10000, så vi kan gøre 
 count(unique(bilbasenWebScrape,vars=c(carid,feature)),vars=carid) #891 unikke bil ID, betydende no dupes
 
 count <- as.numeric(n_distinct(bilbasenWebScrape$carid)) # Samme men med dplyr
+
+#### Opgave 1.2 ####
+#description <- page %>% html_element(bildescripts) %>% html_text(trim = TRUE)
+#description <- gsub("\n\\d[0-9]*","",description) # Fjerner HTML/CSS page break
+#description <- gsub("[^A-Za-z0-9,. ]", "", description). # Fjerner unwanted chars via ^ (basically en NOT)
+#description <- gsub("\\s+", " ", description) # Samler multiple spaces med 1
+#description <- gsub("\\s*\\.\\s*\\.\\s*", ". ", description) # Samler multiple . (selv hvis der er space) til 1
 
 #### Tyske hjemmesider ####
 # 1. https://www.mobile.de/
@@ -262,6 +275,13 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
 TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
 saveRDS(Tyskebiler, TRDSname)
 
+#### 1.3 ####
+#Gem som CSV og selv lav ændringerne
+#Det store arbejder er at systematisk samligne de 2 dataframe, f.eks. anti join, hvilke nye række og hvad er forskellen?
+
+
+
+
 # Kunne være spændende at se om man kan scrape geo data, og lave et map
 #
 #
@@ -270,15 +290,24 @@ saveRDS(Tyskebiler, TRDSname)
 ##### lav map over dk i kommune ####
 ## https://github.com/sebastianbarfort/mapDK
 
+#### To SQL ####
+library(DBI)
+library(RMariaDB)
 
-# Konverter location til 2; kommune og region
-library(dplyr)
-library(tidyr)
-bildata <- as.data.frame(bilbasenWebScrape)
-bildata <- df %>% separate(bildata$location, c("kommune","region"))
+# Hvis i skal bruge hjælp til at opsætte dette, kan i min repo guide: https://github.com/60gCreatine/Skjul_API-KEY_i_RStudio_Git
+# Ellers bare i stedet for password i con skriv jeres password HUSK IKKE AT UPLOADE TIL GIT HVIS I GØR DET!!!!!
+readRenviron(".Renviron")
+password <- paste0(Sys.getenv("password"),'"')
 
-library(mapDK)
-mapDK(values = "pris", id = "")
-
+# I workbench lav database med navnet newbilbasen
+# CREATE DATABASE newbilbasen;
+con <- dbConnect(MariaDB(),
+                 db="empl",
+                 host="localhost",
+                 port=3306,
+                 user="root",
+                 password=password)
+bil <- readRDS("bilbasenWebScrape_2024-11-23-22-35.rds")
+dbWriteTable(con,"cars",bil)
 
 
