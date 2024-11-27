@@ -36,7 +36,7 @@ df[,2:header_amount] <- lapply(df[,2:header_amount], function(x) as.numeric(gsub
 RDSname <- paste0(operator,"_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".rds")
 saveRDS(df,RDSname)
 
-print(nrow(df))
+
 
 
 

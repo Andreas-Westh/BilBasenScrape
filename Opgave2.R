@@ -1,5 +1,9 @@
 library(httr)
 library(rvest)
+
+
+#### Opgave 2.4 ####
+# Skal kunne eksikveres i terminalen, og med målestationen som argument
 startlink <- "https://envs2.au.dk/Luftdata/Presentation/table/Aarhus/AARH3"
 UserA <- "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 
@@ -22,7 +26,7 @@ rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
 page <- read_html(rawcontent)
 cat(rawcontent) # Se opstillin, her kan det ses at tablet er indlæst dynamisk gennem Java
 
-#### Århus bandegårdsgade ####
+##### Århus bandegårdsgade #####
 # URL for tabellen, som indlæses i JS
 # https://imgur.com/a/IXWlTUE URL
 # https://imgur.com/a/4lrwu4F RESPONSE
@@ -34,7 +38,7 @@ token <- read_html(rawcontent) %>%
   html_element("input[name='__RequestVerificationToken']") %>% 
   html_attr("value") # Trækker bare værdierne ud
 
-# Java Script POST request
+# Java Script-generaret HTML POST request på en unload
 jsPOST <- POST(
   url = js_url,
   add_headers(
@@ -65,8 +69,10 @@ str(Aarhus) # alle er chr
 Aarhus[, 2:header_amount] <- lapply(Aarhus[, 2:header_amount], function(x) as.numeric(gsub(",", ".", x))) 
 #alternativt kan man ungå lapply/function ved at lave gsub for hver kolonne
 str(Aarhus)
+Aarhus_RDSname <- paste0("Aarhus_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".rds")
+saveRDS(Aarhus,Aarhus_RDSname)
 
-#### Risø ####
+##### Risø #####
 ri_link <- "https://envs2.au.dk/Luftdata/Presentation/table/Rural/RISOE"
 rirawres <- GET(
   url = ri_link,
@@ -95,9 +101,10 @@ ri_unlist <- unlist(ri_table_data)
 Risø <- as.data.frame(matrix(data = ri_unlist, ncol = ri_header_amount, byrow = T))
 colnames(Risø) <- ri_header
 Risø[, 2:ri_header_amount] <- lapply(Risø[, 2:ri_header_amount], function(x) as.numeric(gsub(",", ".", x))) 
+ri_RDSname <- paste0("Risø_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".rds")
+saveRDS(Risø,ri_RDSname)
 
-
-#### Anholt ####
+##### Anholt #####
 an_link <- "https://envs2.au.dk/Luftdata/Presentation/table/Rural/ANHO"
 anrawres <- GET(url = an_link, add_headers(`User Agent`= UserA))
 print(anrawres$status_code)
@@ -120,10 +127,11 @@ an_unlist <- unlist(an_table_data)
 Anholt <- as.data.frame(matrix(data = an_unlist, ncol = an_header_amount, byrow = T))
 colnames(Anholt) <- an_header
 Anholt[,2:an_header_amount] <- lapply(Anholt[,2:an_header_amount], function(x) as.numeric(gsub(",",".",x)))
+Anholt_RDSname <- paste0("Anholt_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".rds")
+saveRDS(Anholt,Anholt_RDSname)
 
 
-
-#### Hc Andersens Boulevard ####
+##### Hc Andersens Boulevard # <- ####
 hc_link = "https://envs2.au.dk/Luftdata/Presentation/table/Copenhagen/HCAB"
 hcrawres <- GET(url = hc_link, add_headers(`User Agent`=UserA))
 print(hcrawres$status_code)
@@ -146,3 +154,11 @@ hc_unlist <- unlist(hc_table_data)
 HC_Andersens_Boulevard <- as.data.frame(matrix(data = hc_unlist,ncol = hc_header_amount,byrow = T))
 colnames(HC_Andersens_Boulevard) <- hc_header
 HC_Andersens_Boulevard[,2:hc_header_amount] <- lapply(HC_Andersens_Boulevard[,2:hc_header_amount], function(x) as.numeric(gsub(",",".",x)))
+HC_Andersens_Boulevard_RDSname <- paste0("HC_Andersens_Boulevard_", format(Sys.time(), "%Y-%m-%d_%H-%M"), ".rds")
+saveRDS(HC_Andersens_Boulevard,HC_Andersens_Boulevard_RDSname)
+
+
+
+
+
+
