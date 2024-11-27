@@ -192,18 +192,10 @@ Tratingtag <- 'span.BlackStars_wrapper__stcae'
 Timagetag <- '.img.NewGallery_img__cXZQC'
 
 
-Tyskebiler <- data.frame(matrix(data = NA, nrow = 0, ncol = 13))
-ColnamesTysk <- c("Pris", "Navn", "Milage", "Calender", "Type", "Speedometer", "Distence", "Lightning", "Leaf", "Seller", "SellerRating", "Image", "Scrape-date")
+Tyskebiler <- data.frame(matrix(data = NA, nrow = 0, ncol = 15))
+ColnamesTysk <- c("Pris (EUR)","Pris (DKK)", "Navn","Model","Milage", "Calender", "Type", "Speedometer", "Distence", "Lightning", "Leaf", "Seller", "SellerRating", "Image", "Scrape-date")
 colnames(Tyskebiler) <- ColnamesTysk
 
-
-#Tlast_page <- Tpage %>%
-#  html_elements("li.pagination-item button") %>%
-#  html_text(trim = TRUE) %>%
-#  tail(1) %>% as.numeric()
-
-# Vælge en MakeModel, for at komme rundt om 20 maks sider 
-# scrollable-list
 for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i linket
   Modelscrape <- paste0("Scraper nu for model: ", model)
   print(Modelscrape)
@@ -213,6 +205,9 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
     url = modellink,
     add_headers(`User-Agent` = UserT)
   )
+  kurs <- GET("https://api.frankfurter.app/latest?from=EUR&to=DKK") # API til at omregne Kurs
+  kurs_data <- fromJSON(content(kurs, as = "text"))
+  eur_to_dkk <- as.numeric(kurs_data$rates$DKK)
   if (Trawres$status_code != 200) { # Mindre kode til at tjekke status 
     print(paste("Fejl i anmodning, statuskode:", Trawres$status_code))
   }
@@ -241,8 +236,12 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
     
     for (Tcar in Tcarlist) { #Loop at nuværende side, aka det reele scrape af bil info
       tryCatch({
-        Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tpris <- Tcar %>% html_element(Tpricetag) %>% html_text(trim = TRUE)
+        Tpris <- ifelse(Tpris == "" | is.null(Tpris), NA, as.numeric(gsub("[^0-9]", "", Tpris)))
+        DKKpris <- ifelse(is.na(Tpris), NA, Tpris * eur_to_dkk)
+        
         Tname <- Tcar %>% html_element(Tnametag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
+        Tmodel <- model
         Tmilage <- Tcar %>% html_element(Tmilagetag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
         Tcalender <- Tcar %>% html_element(Tcalendertag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
         Tgas <- Tcar %>% html_element(Tgastag) %>% html_text(trim = TRUE) %>% ifelse(is.na(.), "NA", .)
@@ -255,11 +254,9 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
         Timage <- Tcar %>% html_element(Timagetag) %>% html_attr("src") %>% ifelse(is.na(.), "NA", .)
         
         tmpDF <- data.frame(
-          Tpris, Tname, Tmilage, Tcalender, Tgas, Tspeedometer, 
+          Tpris, DKKpris, Tname, Tmodel, Tmilage, Tcalender, Tgas, Tspeedometer, 
           Tdistance, Tlightning, Tleaf, Tseller, Trating, Timage, 
-          Sys.time(), stringsAsFactors = FALSE
-        )
-        
+          Sys.time(), stringsAsFactors = FALSE)
         Tyskebiler <- rbind(Tyskebiler, tmpDF)
       })
       error = function(cond) {
@@ -271,15 +268,46 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
     }
   }
 }
-
 TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
 saveRDS(Tyskebiler, TRDSname)
+
+
+# Afgifter for 'billige' og for 'dyre'
+# nypriser < 448000 (2023 niveau) er afgiftsfritaget 
+# dyrere har registreringsafgift
+
+# Kopier den oprindelige dataframe
+Tyskebiler_simple <- Tyskebiler
+
+# 1. Beregn alder baseret på Tcalender
+Tyskebiler_simple$Alder <- as.numeric(format(Sys.Date(), "%Y")) - as.numeric(sub(".*/", "", Tyskebiler_simple$Tcalender))
+
+# 2. Fjern " km" fra Tmilage og konverter til numerisk
+Tyskebiler_simple$Km <- as.numeric(gsub("[^0-9]", "", Tyskebiler_simple$Tmilage))
+
+# 3. Beregn registreringsafgift baseret på dansk afgiftssystem
+Tyskebiler_simple$Registreringsafgift <- with(Tyskebiler_simple, {
+  vurderet <- DKKpris
+  ifelse(vurderet <= 308000, 
+         vurderet * 1.25, # Tilføj moms på 25% for værdier op til 308.000 DKK
+         ifelse(vurderet <= 619000, 
+                (308000 * 1.25) + ((vurderet - 308000) * 1.20), # Moms + 20% for værdien mellem 308.000 og 619.000
+                (308000 * 1.25) + (311000 * 1.20) + ((vurderet - 619000) * 1.65) # Moms + 65% for værdien over 619.000
+         )
+  )
+})
+
+# 4. Skab en simpel dataframe med relevante kolonner
+Tyskebiler_simple <- Tyskebiler_simple[, c("Tmodel", "Alder", "Km", "DKKpris", "Registreringsafgift")]
+
+# 5. Beregn gennemsnit for DKKpris og Registreringsafgift pr. model
+model_gennemsnit <- as.data.frame(aggregate(cbind(DKKpris, Registreringsafgift) ~ Tmodel, data = Tyskebiler_simple, FUN = mean, na.rm = TRUE))
+model_gennemsnit$ProcentDifference <- round(with(model_gennemsnit, ((Registreringsafgift - DKKpris) / DKKpris) * 100),1)
+
 
 #### 1.3 ####
 #Gem som CSV og selv lav ændringerne
 #Det store arbejder er at systematisk samligne de 2 dataframe, f.eks. anti join, hvilke nye række og hvad er forskellen?
-
-
 
 
 # Kunne være spændende at se om man kan scrape geo data, og lave et map
