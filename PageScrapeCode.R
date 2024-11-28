@@ -316,8 +316,72 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
 TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
 saveRDS(Tyskebiler, TRDSname)
 
+fcvrtag <- "p.bas-MuiSellerInfoComponent-cvr"
 
-# Afgifter for 'billige' og for 'dyre'
+#### Hente forhandler ID ####
+bilidlink_start <- "https://www.bilbasen.dk/brugt/bil/bmw/i/"
+fnavntag <- "div.bas-MuiVipSectionComponent-sectionHeader.bas-MuiSellerInfoComponent-headerStyles"
+faddresstag <- "a[data-e2e='seller-address']"
+fcvrtag <- "p.bas-MuiSellerInfoComponent-cvr"
+
+forhlist <- as.list(bilbasenWebScrape$carid)
+
+forhandler_data <- data.frame(matrix(data = NA, nrow = 0, ncol = 5))
+Forh_col <- c("Carid","Forhandler_id","Forhandler","Addresse","CVR")
+colnames(forhandler_data) <- Forh_col
+
+# Loop gennem forhandler data for hver carid
+for (i in forhlist) {
+  # Construct the URL for the car
+  loopbilid <- paste0(bilidlink_start, i)
+  
+  # Sleep to prevent being flagged as a bot
+  Sys.sleep(runif(1, min = 0.5, max = 5))
+  
+  # Make the GET request
+  frawres <- GET(
+    url = loopbilid,
+    add_headers(
+      `User-Agent` = UserA,
+      `Accept-Language` = "en-US,en;q=0.9",
+      `Accept-Encoding` = "gzip, deflate, br",
+      `Connection` = "keep-alive",
+      `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+      `Cookie` = cookie
+    )
+  )
+  
+  # Check if the response is successful
+  if (frawres$status_code == 200) {
+    # Parse the HTML content
+    frawcontent <- httr::content(frawres, as = "text", encoding = "UTF-8")
+    fpage <- read_html(frawcontent)
+    
+    # Scrape the specific details
+    fnavn <- fpage %>% html_element(fnavntag) %>% html_text(trim = TRUE)
+    faddress <- fpage %>% html_element(faddresstag) %>% html_text(trim = TRUE)
+    fcvr <- fpage %>% html_element(fcvrtag) %>% html_text(trim = TRUE)
+        fcvr <- gsub("[^0-9]", "", fcvr)
+    
+    # Append the scraped data to the dataframe
+    forhandler_data <- rbind(
+      forhandler_data, 
+      data.frame(Carid = i, Forhandler_id = NA, Forhandler = fnavn, Addresse = faddress, CVR = fcvr, stringsAsFactors = FALSE)
+    )
+  } else {
+    print(paste("Failed to scrape car ID:", i, "Status code:", frawres$status_code))
+  }
+  floopstatus <- paste0(nrow(forhandler_data),"/",n_distinct(bilbasenWebScrape$carid))
+  print(floopstatus)
+}
+RDSfname <- paste0("bilbasenWebScrapeForhandler_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".rds")
+saveRDS(forhandler_data, RDSfname)
+RDSfsave <- paste0("Gemmer den scrapede data i filen: ", RDSfname)
+print(RDSsave)
+
+  
+  
+  # Afgifter for 'billige' og for 'dyre'
 # nypriser < 448000 (2023 niveau) er afgiftsfritaget 
 # dyrere har registreringsafgift
 
@@ -348,6 +412,7 @@ Tyskebiler_simple$PrisMoms <-
     Tyskebiler_simple$DKKpris
   )
 
+# Afkifter tages for 
 Tyskebiler_simple$Registreringsafgift <- with(Tyskebiler_simple, {
   vurderet <- PrisMoms
   
@@ -364,8 +429,8 @@ Tyskebiler_simple$Registreringsafgift <- with(Tyskebiler_simple, {
 
 
 # 5. Beregn gennemsnit for DKKpris og Registreringsafgift pr. model
-model_gennemsnit <- as.data.frame(aggregate(cbind(DKKpris, Registreringsafgift) ~ Tmodel, data = Tyskebiler_simple, FUN = mean, na.rm = TRUE))
-model_gennemsnit$ProcentDifference <- round(with(model_gennemsnit, ((Registreringsafgift - DKKpris) / DKKpris) * 100),1)
+model_gennemsnit <- as.data.frame(aggregate(cbind(PrisMoms, Registreringsafgift) ~ Tmodel, data = Tyskebiler_simple, FUN = mean, na.rm = TRUE))
+model_gennemsnit$ProcentDifference <- round(with(model_gennemsnit, ((Registreringsafgift - PrisMoms) / PrisMoms) * 100),1)
 bilbasenWebScrape$pris <- as.numeric(bilbasenWebScrape$pris)
 model_gennemsnit$DKbiler <- aggregate(pris~specificmodel, data = bilbasenWebScrape, FUN = mean, na.rn=T)
 model_gennemsnit$DiffTyskOgDansk <- round(with(model_gennemsnit, ((Registreringsafgift - DKbiler$pris) / DKbiler$pris) * 100),1)
