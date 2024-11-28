@@ -53,11 +53,9 @@ bilbasenWebScrape <- data.frame(matrix(data = NA, nrow = 0, ncol = 14))
 ColnamesCars <- c("Pris", "Bilmodel", "Specific Model", "Detaljer", "Beskrivelse", "Lokation", "Link", "Bil-ID", "Scrape-Dato", "registrering", "kilometertal","Forhandlerid","by","region")
 colnames(bilbasenWebScrape) <- ColnamesCars
 
-
 # Extract all spans on the page
 last_page <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% html_text(trim = TRUE) %>% as.numeric()
 #bilbasenWebScrape <- readRDS("bilbasenWebScrape_2024-11-23-22-35.rds")
-
 #### Webscrape Loop #### 
 for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
   loopurl <- paste0(startlink, i)
@@ -169,6 +167,7 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
     }
   }
 }
+#6354580
 bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
 bilmodeller <- as.list(unique(bilbasenWebScrape$specificmodel))
 
@@ -205,7 +204,7 @@ count <- as.numeric(n_distinct(bilbasenWebScrape$carid)) # Samme men med dplyr
 #### Webscrape Tyskland ####
 # Lave et loop der macther til biler i Bilmodeller df
 UserT = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:132.0) Gecko/20100101 Firefox/132.0"
-Tstartlink <- paste0("https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=","","&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
+Tstartlink <- paste0("https://www.autoscout24.de/lst/bmw?atype=C&cy=D&damaged_listing=exclude&desc=0&fuel=E&ocs_listing=include&page=&powertype=kw&search_id=1pfsvl8rerg&sort=standard&source=listpage_pagination&ustate=N%2CU")
 Trawres <- GET(
   url = Tstartlink,
   add_headers(
@@ -236,6 +235,7 @@ Tsellertag <- 'span[data-testid="sellerinfo-company-name"]'
 Tratingtag <- 'span.BlackStars_wrapper__stcae'
 Timagetag <- '.img.NewGallery_img__cXZQC'
 
+tysk_backup <- Tyskebiler
 
 Tyskebiler <- data.frame(matrix(data = NA, nrow = 0, ncol = 15))
 ColnamesTysk <- c("Pris (EUR)","Pris (DKK)", "Navn","Model","Milage", "Calender", "Type", "Speedometer", "Distence", "Lightning", "Leaf", "Seller", "SellerRating", "Image", "Scrape-date")
@@ -316,7 +316,6 @@ for (model in bilmodeller) { # Looper i gennem modellisten, og indsætter i link
 TRDSname <- paste0("TyskWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
 saveRDS(Tyskebiler, TRDSname)
 
-fcvrtag <- "p.bas-MuiSellerInfoComponent-cvr"
 
 #### Hente forhandler ID ####
 bilidlink_start <- "https://www.bilbasen.dk/brugt/bil/bmw/i/"
@@ -338,6 +337,9 @@ for (i in forhlist) {
   # Sleep to prevent being flagged as a bot
   Sys.sleep(runif(1, min = 0.5, max = 5))
   
+  colnames(Tyskebiler)[1] <- "Pris (EUR)"
+  colnames(Tyskebiler)[2] <- "Pris (DKK)"
+  colnames(Tyskebiler)[3] <- "Bilnavn"
   # Make the GET request
   frawres <- GET(
     url = loopbilid,
@@ -374,12 +376,16 @@ for (i in forhlist) {
   floopstatus <- paste0(nrow(forhandler_data),"/",n_distinct(bilbasenWebScrape$carid))
   print(floopstatus)
 }
+forhandler_data$Forhandler_id <- bilbasenWebScrape$forhandlerid
 RDSfname <- paste0("bilbasenWebScrapeForhandler_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".rds")
 saveRDS(forhandler_data, RDSfname)
 RDSfsave <- paste0("Gemmer den scrapede data i filen: ", RDSfname)
 print(RDSsave)
-
-  
+#> n_distinct(forhandler_data$Carid)
+#[1] 956
+#> n_distinct(forhandler_data$CVR)
+#[1] 214
+#  
   
   # Afgifter for 'billige' og for 'dyre'
 # nypriser < 448000 (2023 niveau) er afgiftsfritaget 
