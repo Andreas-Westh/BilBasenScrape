@@ -46,10 +46,11 @@ bildetails <- ".ListingDetails_listItem___omDg"
 bildescripts <- ".Listing_description__sCNNM"
 billocation <- ".Listing_location__nKGQz"
 prop <- ".Listing_properties___ptWv"
+forh <- ".Listing_dealerLogoCard__wHl9H"
 
 # Opret en dataframe til at gemme bildata
-bilbasenWebScrape <- data.frame(matrix(data = NA, nrow = 0, ncol = 9))
-ColnamesCars <- c("Pris", "Bilmodel", "Specific Model", "Detaljer", "Beskrivelse", "Lokation", "Link", "Bil-ID", "Scrape-Dato")
+bilbasenWebScrape <- data.frame(matrix(data = NA, nrow = 0, ncol = 14))
+ColnamesCars <- c("Pris", "Bilmodel", "Specific Model", "Detaljer", "Beskrivelse", "Lokation", "Link", "Bil-ID", "Scrape-Dato", "registrering", "kilometertal","Forhandlerid","by","region")
 colnames(bilbasenWebScrape) <- ColnamesCars
 
 
@@ -59,7 +60,7 @@ last_page <- page %>% html_elements('span[data-e2e="pagination-total"]') %>% htm
 
 #### Webscrape Loop #### 
 for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
-  loopurl <- paste0(startlink,i)
+  loopurl <- paste0(startlink, i)
   Sys.sleep(runif(1, min = 0.5, max = 2))
   rawres <- GET(
     url = loopurl,
@@ -69,61 +70,105 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       `Accept-Encoding` = "gzip, deflate, br",
       `Connection` = "keep-alive",
       `Accept` = "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-      `Cookie` = cookie 
-    )
+      `Cookie` = cookie
+      )
   )
   rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
   page <- read_html(rawcontent)
   carlist <- page %>% html_elements("article")
+  
   for (car in carlist) { # Webscrape
     tryCatch({
       pris <- car %>% html_element(ptag) %>% html_text(trim = TRUE)
+      pris <- str_replace_all(pris, "\\s*kr\\.*|\\.", "")
       model <- car %>% html_element(makertag) %>% html_text(trim = TRUE)
       specificmodel <- car %>% html_element(modalnametag) %>% html_text(trim = TRUE)
       details <- car %>% html_elements(bildetails) %>% html_text(trim = TRUE) %>% paste0(collapse = "_")
       description <- car %>% html_element(bildescripts) %>% html_text(trim = TRUE)
-        #### Opgave 1.2 Rens data ####
-            description <- gsub("\n\\d[0-9]*","",description) # Fjerner HTML/CSS page break
-            description <- gsub("[^A-Za-z0-9,. æøåÆØÅ]", "", description) # Fjerner unwanted chars via ^ (basically en NOT)
-            description <- gsub("\\s+", " ", description) # Samler multiple spaces med 1
-            description <- gsub("\\s*\\.\\s*\\.\\s*", ". ", description) # Samler multiple . (selv hvis der er space) til 1
-            description <- gsub("^\\s*[0-9]*\\.\\s*", "", description) # fjerner start med tal eller space
-            description <- gsub("^\\s+", "", description)
+      forhandlerid <- car %>% html_elements(forh) %>% html_attr("src")
+      if (length(forhandlerid) > 0) {
+        # Rens hvis der er en gyldig værdi
+        forhandlerid <- gsub(".*/bilinfo/|\\..*", "", forhandlerid)
+      } else {
+        # Sæt til NA hvis mangler
+        forhandlerid <- NA
+      }
+      
+      #### Rens data i 'description' ####
+      description <- gsub("\n\\d[0-9]*","",description) # Fjerner HTML/CSS page break
+      description <- gsub("[^A-Za-z0-9,. æøåÆØÅ]", "", description) # Fjerner unwanted chars
+      description <- gsub("\\s+", " ", description) # Samler multiple spaces til 1
+      description <- gsub("\\s*\\.\\s*\\.\\s*", ". ", description) # Samler multiple .
+      description <- gsub("^\\s*[0-9]*\\.\\s*", "", description) # Fjerner start med tal eller space
+      description <- gsub("^\\s+", "", description)
+      
       location <- car %>% html_element(billocation) %>% html_text(trim = TRUE)
+      by <- str_split(location, ",", simplify = TRUE) [, 1]
+      region <- str_split(location, ",", simplify = TRUE) [, 2]
       link <- car %>% html_element("a") %>% html_attr("href")
       carid <- link %>% str_extract("[0-9]{7}")
-      property <- car %>% html_element(prop) %>% html_text(trim=T)
+      property <- car %>% html_element(prop) %>% html_text(trim = TRUE)
       
-      # Opret en midlertidig dataframe og tilføj den til den samlede dataframe
-      tmpDF <- data.frame(pris, model, specificmodel, details, property, description, location, link, carid, Sys.time(), stringsAsFactors = FALSE)
+      
+      #### Brug str_extract til at opdele 'details' ####
+      registrering <- str_extract(details, "^\\d+/\\d{4}")              # Matcher 'registrering'
+      kilometertal <- str_extract(details, "\\d+\\.\\d+\\s*km")        # Matcher 'kilometertal'
+      rækkevidde <- str_extract(details, "\\d+\\s*km(?= rækkevidde)")  # Matcher 'rækkevidde'
+      brændstof <- str_extract(details, "rækkevidde_[^_]+$")           # Matcher 'brændstof'
+      kilometertal <- str_extract(details, "\\d+\\.\\d+\\s*km")        
+      rækkevidde <- str_extract(details, "\\d+\\s*km(?= rækkevidde)")  
+      kilometertal <- str_extract(kilometertal, "[0-9]+\\.?[0-9]*")  
+      rækkevidde <- str_extract(rækkevidde, "[0-9]+")
+      kilometertal <- str_replace_all(kilometertal, "\\.", "") 
+      
+      # Fjern "rækkevidde_" fra 'brændstof'
+      brændstof <- gsub("^rækkevidde_", "", brændstof)
+      
+      # Opret midlertidig dataframe
+      tmpDF <- data.frame(
+        pris, model, specificmodel, details, property, description, 
+        location, link, carid, Sys.time(), 
+        registrering, kilometertal, rækkevidde, brændstof, forhandlerid, by, region,
+        stringsAsFactors = F
+      )
       bilbasenWebScrape <- rbind(bilbasenWebScrape, tmpDF)
-    },
-    error = function(cond) {
+      
+    }, error = function(cond) {
       print(cond)
     })
+    
     current_row_count <- nrow(bilbasenWebScrape)
-    Loop <- paste0("Loopet har nu fanget: ",current_row_count," biler, ved loop: ",i,", klokken: ",format(Sys.time(),"%Y-%m-%d-%H-%M"))
+    Loop <- paste0("Loopet har nu fanget: ", current_row_count, " biler, ved loop: ", i, ", klokken: ", format(Sys.time(), "%Y-%m-%d-%H-%M"))
     print(Loop)
   }
-  if (i==last_page){ #Bruges til at lave output i console
-    count <- as.numeric(n_distinct(bilbasenWebScrape$carid)) # dplyr pakke bruges til n_distinct
-    if (nrow(bilbasenWebScrape)!=count) {
-      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasenWebScrape)-count,"dublikationer")
-      print(IDcount)
-    } else if (nrow(bilbasenWebScrape) == count) { # Sker kun, når loopet er færdigt
+  
+  if (i == last_page) { # Når sidste side er gennemgået
+    count <- as.numeric(n_distinct(bilbasenWebScrape$carid))
+    if (nrow(bilbasenWebScrape) != count) {
+      IDcountDupe <- paste0("ID passer ikke, der er: ", nrow(bilbasenWebScrape) - count, " dublikationer")
+      print(IDcountDupe)
+    } else {
       IDcount <- paste0("Der er ingen dublikationer i alle: ", count, " biler")
       print(IDcount)
-      # Gemmer filsen som en RDS
-      RDSname <- paste0("bilbasenWebScrape_",format(Sys.time(), "%Y-%m-%d-%H-%M"),".rds")
+      
+      # Fjern "rækkevidde_" fra 'brændstof'
+      bilbasenWebScrape$brændstof <- gsub("^rækkevidde_", "", bilbasenWebScrape$brændstof)
+      
+      # Slet kolonnerne 'details' og 'property'
+      bilbasenWebScrape <- bilbasenWebScrape %>% select(-details, -property, -location)
+      
+      # Gem data som RDS
+      RDSname <- paste0("bilbasenWebScrape_", format(Sys.time(), "%Y-%m-%d-%H-%M"), ".rds")
       saveRDS(bilbasenWebScrape, RDSname)
-      RDSsave <- paste0("Gemmer den scrapede data i filen: ",RDSname)
+      RDSsave <- paste0("Gemmer den scrapede data i filen: ", RDSname)
       print(RDSsave)
-      # Laver en kolonne med den specifikke bilmoden, bliver relevant til det tyske loop
-      bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
+      
+      # Fjern mærkenavne fra 'specificmodel'
+      bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel)
       bilmodeller <- data.frame(unique(bilbasenWebScrape$specificmodel))
     }
   }
-} 
+}
 bilbasenWebScrape$specificmodel <- sub(".*? ", "", bilbasenWebScrape$specificmodel) #Fjerne BMW fra kolonnen
 bilmodeller <- as.list(unique(bilbasenWebScrape$specificmodel))
 
@@ -281,29 +326,50 @@ Tyskebiler_simple <- Tyskebiler
 
 # 1. Beregn alder baseret på Tcalender
 Tyskebiler_simple$Alder <- as.numeric(format(Sys.Date(), "%Y")) - as.numeric(sub(".*/", "", Tyskebiler_simple$Tcalender))
+# Beregn alder i måneder direkte fra 'Tcalender'
+Tyskebiler_simple$Alder_i_måneder <- with(
+  Tyskebiler_simple,
+  (as.numeric(format(Sys.Date(), "%Y")) - as.numeric(sub(".*/", "", Tcalender))) * 12 +
+    (as.numeric(format(Sys.Date(), "%m")) - as.numeric(sub("/.*", "", Tcalender)))
+)
+
 
 # 2. Fjern " km" fra Tmilage og konverter til numerisk
 Tyskebiler_simple$Km <- as.numeric(gsub("[^0-9]", "", Tyskebiler_simple$Tmilage))
 
+
 # 3. Beregn registreringsafgift baseret på dansk afgiftssystem
+# Moms for elbiler under 6 mpneder og mindre en 6000 km
+# https://www.tjekbil.dk/import-af-elbil-fra-tyskland
+Tyskebiler_simple$PrisMoms <- 
+  ifelse(
+    Tyskebiler_simple$Alder_i_måneder <= 6 | Tyskebiler_simple$Km <= 6000, 
+    Tyskebiler_simple$DKKpris * 1.25, 
+    Tyskebiler_simple$DKKpris
+  )
+
 Tyskebiler_simple$Registreringsafgift <- with(Tyskebiler_simple, {
-  vurderet <- DKKpris
-  ifelse(vurderet <= 308000, 
-         vurderet * 1.25, # Tilføj moms på 25% for værdier op til 308.000 DKK
-         ifelse(vurderet <= 619000, 
-                (308000 * 1.25) + ((vurderet - 308000) * 1.20), # Moms + 20% for værdien mellem 308.000 og 619.000
-                (308000 * 1.25) + (311000 * 1.20) + ((vurderet - 619000) * 1.65) # Moms + 65% for værdien over 619.000
-         )
+  vurderet <- PrisMoms
+  
+  ifelse(
+    vurderet <= 308000, 
+    vurderet, # Ingen ændring for værdier under eller lig med 308.000
+    ifelse(
+      vurderet <= 619000, 
+      308000 + (vurderet - 308000) * 1.20, # 20% for værdien mellem 308.000 og 619.000
+      308000 + (619000 - 308000) * 1.20 + (vurderet - 619000) * 1.65 # 65% for værdien over 619.000
+    )
   )
 })
 
-# 4. Skab en simpel dataframe med relevante kolonner
-Tyskebiler_simple <- Tyskebiler_simple[, c("Tmodel", "Alder", "Km", "DKKpris", "Registreringsafgift")]
 
 # 5. Beregn gennemsnit for DKKpris og Registreringsafgift pr. model
 model_gennemsnit <- as.data.frame(aggregate(cbind(DKKpris, Registreringsafgift) ~ Tmodel, data = Tyskebiler_simple, FUN = mean, na.rm = TRUE))
 model_gennemsnit$ProcentDifference <- round(with(model_gennemsnit, ((Registreringsafgift - DKKpris) / DKKpris) * 100),1)
-
+bilbasenWebScrape$pris <- as.numeric(bilbasenWebScrape$pris)
+model_gennemsnit$DKbiler <- aggregate(pris~specificmodel, data = bilbasenWebScrape, FUN = mean, na.rn=T)
+model_gennemsnit$DiffTyskOgDansk <- round(with(model_gennemsnit, ((Registreringsafgift - DKbiler$pris) / DKbiler$pris) * 100),1)
+model_gennemsnit$DiffTyskOgDanskUdenAfgiftMoms <- round(with(model_gennemsnit, ((DKKpris - DKbiler$pris) / DKbiler$pris) * 100),1)
 
 #### 1.3 ####
 #Gem som CSV og selv lav ændringerne
