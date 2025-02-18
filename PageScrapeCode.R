@@ -34,8 +34,6 @@ print(rawres$status_code)
 # Hent HTML-indholdet fra svaret
 rawcontent <- httr::content(rawres, as = "text", encoding = "UTF-8")
 page <- read_html(rawcontent)
-
-# Ekstraher biloplysninger fra siden
 carlist <- page %>% html_elements("article")
 
 # Definer CSS-selectors til at hente data
@@ -114,7 +112,8 @@ for (i in 1:last_page) { # Sleep + startlink til lastpage + headers
       rækkevidde <- str_extract(details, "\\d+\\s*km(?= rækkevidde)")  # Matcher 'rækkevidde'
       brændstof <- str_extract(details, "rækkevidde_[^_]+$")           # Matcher 'brændstof'
       kilometertal <- str_extract(details, "\\d+\\.\\d+\\s*km")        
-      rækkevidde <- str_extract(details, "\\d+\\s*km(?= rækkevidde)")  
+      rækkevidde <- str_extract(details, "\\d+\\s*km(?= rækkevidde)") 
+      rækkevidde <- str_extract(rækkevidde, "[0-9]+")
       kilometertal <- str_extract(kilometertal, "[0-9]+\\.?[0-9]*")  
       rækkevidde <- str_extract(rækkevidde, "[0-9]+")
       kilometertal <- str_replace_all(kilometertal, "\\.", "") 
